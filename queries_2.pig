@@ -19,14 +19,20 @@ movie_data = FOREACH raw_movies GENERATE movieID,
              REPLACE(title, ' \\((\\d+)\\)$', '') AS title,
              TOKENIZE(genres, '|') AS genres;
 
+-- RATING DATA (WITH >=5 SIGNIFICANCE)
+
+group_raw_ratings = GROUP raw_ratings BY movieID;
+filter_group_raw_ratings = FILTER group_raw_ratings BY COUNT(raw_ratings) >= 5;
+ratings_data = FOREACH filter_group_raw_ratings GENERATE FLATTEN(raw_ratings);
+
 -- JOIN RATINGS AND USERS WITH OCCUPATION NAMES INSTEAD OF ID
-ratings_with_users_data = JOIN raw_ratings BY userID, users_no_occupation_id BY userID;
+ratings_with_users_data = JOIN ratings_data BY userID, users_no_occupation_id BY userID;
 
 
 -- ################################# TOP 10 MOVIES FOR EACH OCCUPATION ################################
 
 -- GROUP BY OCCUPATION AND MOVIE ID
-group_occ_movie = GROUP ratings_with_users_data BY (occupation_names::name, raw_ratings::movieID);
+group_occ_movie = GROUP ratings_with_users_data BY (occupation_names::name, ratings_data::raw_ratings::movieID);
 
 -- GET AVERAGE RATING OF MOVIE FOR EACH OCCUPATION
 occ_movie_avg_rating = FOREACH group_occ_movie GENERATE FLATTEN(group) AS (occupation, movieID), AVG(ratings_with_users_data.rating) AS avg_rating;
@@ -35,7 +41,7 @@ occ_movie_avg_rating = FOREACH group_occ_movie GENERATE FLATTEN(group) AS (occup
 occ_movie_avg_rating_with_movies_data = JOIN occ_movie_avg_rating BY movieID, movie_data BY movieID;
 
 -- ADD MOVIE TITLE TO RELATION AND DELETE MOVIE ID
-occ_movie_title_avg_rating = FOREACH occ_movie_avg_rating_with_movies_data GENERATE occ_movie_avg_rating::occupation AS occupation, movie_data::title AS title, occ_movie_avg_rating::avg_rating AS avg_rating;
+occ_movie_title_avg_rating = FOREACH occ_movie_avg_rating_with_movies_data GENERATE occ_movie_avg_rating::occupation AS occupation, movie_data::title AS title, movie_data::year AS year, occ_movie_avg_rating::avg_rating AS avg_rating;
 
 -- GET TOP 10 MOVIES FOR EACH OCCUPATION
 -- SOLUTION FOUND IN https://stackoverflow.com/questions/17656012/pig-get-top-n-values-per-group
@@ -51,7 +57,7 @@ all_top10_occ_movie_avg_rating = FOREACH group_occ_movie_avg_rating {
 -- ################################# TOP GENRE FOR EACH OCCUPATION ################################
 
 -- JOIN ALL DATA FROM RAW RELATIONS
-all_data = JOIN ratings_with_users_data BY raw_ratings::movieID, movie_data BY movieID;
+all_data = JOIN ratings_with_users_data BY ratings_data::raw_ratings::movieID, movie_data BY movieID;
 
 -- GET USERS OCCUPATION, MOVIE TITLE, MOVIE RATING AND MOVIE GENRES FROM ALL_DATA
 occ_movie_rating_genre = FOREACH all_data GENERATE ratings_with_users_data::name AS occupation, movie_data::title AS title, ratings_with_users_data::rating AS rating, FLATTEN(movie_data::genres) AS genre;
@@ -93,8 +99,8 @@ all_top5_occ_movie_genre_avg_rating = FOREACH group_occ_movie_genre_avg_rating {
 
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (OCCUPATION) ##########################
 
-movie_occ_avg_rating = FOREACH occ_movie_title_avg_rating GENERATE title AS title, occupation AS occupation, avg_rating AS avg_rating;
-group_movie_occ_avg_rating = GROUP movie_occ_avg_rating BY title;
+movie_occ_avg_rating = FOREACH occ_movie_title_avg_rating GENERATE title AS title, year AS year, occupation AS occupation, avg_rating AS avg_rating;
+group_movie_occ_avg_rating = GROUP movie_occ_avg_rating BY (title,year);
 
 all_top1_movie_occ_avg_rating = FOREACH group_movie_occ_avg_rating {
     sorted_movie_occ_avg_rating = ORDER movie_occ_avg_rating BY avg_rating DESC;
@@ -105,13 +111,13 @@ all_top1_movie_occ_avg_rating = FOREACH group_movie_occ_avg_rating {
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (GENDER) ##########################
 
 -- GROUP BY MOVIE AND USERS GENDER
-group_movie_gender_rating = GROUP all_data BY (movie_data::title, ratings_with_users_data::users_no_occupation_id::raw_users::gender);
+group_movie_gender_rating = GROUP all_data BY (movie_data::title, movie_data::year, ratings_with_users_data::users_no_occupation_id::raw_users::gender);
 
 -- GET AVERAGE RATING OF MOVIE FOR EACH GENDER
-movie_gender_avg_rating = FOREACH group_movie_gender_rating GENERATE FLATTEN(group) AS (title, gender), AVG(all_data.rating) AS avg_rating;
+movie_gender_avg_rating = FOREACH group_movie_gender_rating GENERATE FLATTEN(group) AS (title, year, gender), AVG(all_data.rating) AS avg_rating;
 
 -- GROUP BY TITLE
-group_movie_gender_avg_rating = GROUP movie_gender_avg_rating BY title;
+group_movie_gender_avg_rating = GROUP movie_gender_avg_rating BY (title, year);
 
 -- GENDER GIVING BEST AVERAGE RATING
 all_top1_movie_gender_avg_rating = FOREACH group_movie_gender_avg_rating {
@@ -128,19 +134,19 @@ all_bott1_movie_gender_avg_rating = FOREACH group_movie_gender_avg_rating {
 };
 
 -- CREATE RANK WITH RATING DIFFERENCE BETWEEN M & F
-all_top_movie_gender_avg_rating_ = JOIN all_top1_movie_gender_avg_rating BY title, all_bott1_movie_gender_avg_rating BY title;
-all_top_movie_gender_avg_rating = FOREACH all_top_movie_gender_avg_rating_ GENERATE top1_movie_gender_avg_rating::title,top1_movie_gender_avg_rating::gender,top1_movie_gender_avg_rating::avg_rating, (top1_movie_gender_avg_rating::avg_rating - bott1_movie_gender_avg_rating::avg_rating) AS diff; 
+all_top_movie_gender_avg_rating_ = JOIN all_top1_movie_gender_avg_rating BY (title, year), all_bott1_movie_gender_avg_rating BY (title, year);
+all_top_movie_gender_avg_rating = FOREACH all_top_movie_gender_avg_rating_ GENERATE top1_movie_gender_avg_rating::title,top1_movie_gender_avg_rating::year,top1_movie_gender_avg_rating::gender,top1_movie_gender_avg_rating::avg_rating, (top1_movie_gender_avg_rating::avg_rating - bott1_movie_gender_avg_rating::avg_rating) AS diff; 
 
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (AGE) ##########################
 
 -- GROUP BY MOVIE AND USERS AGE
-group_movie_age_rating = GROUP all_data BY (movie_data::title, ratings_with_users_data::users_no_occupation_id::raw_users::age);
+group_movie_age_rating = GROUP all_data BY (movie_data::title, movie_data::year, ratings_with_users_data::users_no_occupation_id::raw_users::age);
 
 -- GET AVERAGE RATING OF MOVIE OVER ALL AGES
-movie_age_avg_rating = FOREACH group_movie_age_rating GENERATE FLATTEN(group) AS (title, age), AVG(all_data.rating) AS avg_rating;
+movie_age_avg_rating = FOREACH group_movie_age_rating GENERATE FLATTEN(group) AS (title, year, age), AVG(all_data.rating) AS avg_rating;
 
 -- GROUP BY TITLE
-group_movie_age_avg_rating = GROUP movie_age_avg_rating BY title;
+group_movie_age_avg_rating = GROUP movie_age_avg_rating BY (title, year);
 
 all_top1_movie_age_avg_rating = FOREACH group_movie_age_avg_rating {
     sorted_movie_age_avg_rating = ORDER movie_age_avg_rating BY avg_rating DESC;
@@ -151,13 +157,13 @@ all_top1_movie_age_avg_rating = FOREACH group_movie_age_avg_rating {
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (OCCUPATION, GENDER) ##########################
 
 -- GROUP BY MOVIE USERS OCCUPATION & GENDER
-group_movie_occ_gender_rating = GROUP all_data BY (movie_data::title, ratings_with_users_data::users_no_occupation_id::occupation_names::name, ratings_with_users_data::users_no_occupation_id::raw_users::gender);
+group_movie_occ_gender_rating = GROUP all_data BY (movie_data::title, movie_data::year, ratings_with_users_data::users_no_occupation_id::occupation_names::name, ratings_with_users_data::users_no_occupation_id::raw_users::gender);
 
 -- GET AVERAGE RATING OF MOVIE OVER ALL OCCUPATION & GENDERS
-movie_occ_gender_avg_rating = FOREACH group_movie_occ_gender_rating GENERATE FLATTEN(group) AS (title, occupation, gender), AVG(all_data.rating) AS avg_rating;
+movie_occ_gender_avg_rating = FOREACH group_movie_occ_gender_rating GENERATE FLATTEN(group) AS (title, year, occupation, gender), AVG(all_data.rating) AS avg_rating;
 
 -- GROUP BY TITLE
-group_movie_occ_gender_avg_rating = GROUP movie_occ_gender_avg_rating BY title;
+group_movie_occ_gender_avg_rating = GROUP movie_occ_gender_avg_rating BY (title,year);
 
 -- GET BEST RATING FOR EACH MOVIE
 all_top1_movie_occ_gender_avg_rating = FOREACH group_movie_occ_gender_avg_rating {
@@ -169,13 +175,13 @@ all_top1_movie_occ_gender_avg_rating = FOREACH group_movie_occ_gender_avg_rating
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (GENDER, AGE) ##########################
 
 -- GROUP BY MOVIE USERS OCCUPATION & GENDER
-group_movie_gender_age_rating = GROUP all_data BY (movie_data::title, ratings_with_users_data::users_no_occupation_id::raw_users::gender, ratings_with_users_data::users_no_occupation_id::raw_users::age);
+group_movie_gender_age_rating = GROUP all_data BY (movie_data::title, movie_data::year, ratings_with_users_data::users_no_occupation_id::raw_users::gender, ratings_with_users_data::users_no_occupation_id::raw_users::age);
 
 -- GET AVERAGE RATING OF MOVIE OVER ALL OCCUPATION & GENDERS
-movie_gender_age_avg_rating = FOREACH group_movie_gender_age_rating GENERATE FLATTEN(group) AS (title, gender, age), AVG(all_data.rating) AS avg_rating;
+movie_gender_age_avg_rating = FOREACH group_movie_gender_age_rating GENERATE FLATTEN(group) AS (title, year, gender, age), AVG(all_data.rating) AS avg_rating;
 
 -- GROUP BY TITLE
-group_movie_gender_age_avg_rating = GROUP movie_gender_age_avg_rating BY title;
+group_movie_gender_age_avg_rating = GROUP movie_gender_age_avg_rating BY (title, year);
 
 -- GET BEST RATING FOR EACH MOVIE
 all_top1_movie_gender_age_avg_rating = FOREACH group_movie_gender_age_avg_rating {
@@ -184,9 +190,51 @@ all_top1_movie_gender_age_avg_rating = FOREACH group_movie_gender_age_avg_rating
     GENERATE FLATTEN(top1_movie_gender_age_avg_rating);
 };
 
+-- ########################## WORST MOVIES WITH BEST SCORE BY MINOR AUDIENCES ##########################
+
+data_age_below_18 = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::raw_users::age <= 18;
+group_data_age_below_18 = GROUP data_age_below_18 BY (movie_data::title,movie_data::year);
+data_age_below_18_avg_ratings = FOREACH group_data_age_below_18 GENERATE FLATTEN(group) AS (title,year), AVG(data_age_below_18.rating) AS avg_rating;
+
+data_age_above_18 = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::raw_users::age > 18;
+group_data_age_above_18 = GROUP data_age_above_18 BY (movie_data::title,movie_data::year);
+data_age_above_18_avg_ratings = FOREACH group_data_age_above_18 GENERATE FLATTEN(group) AS (title,year), AVG(data_age_above_18.rating) AS avg_rating;
+
+join_data_below_above_18 = JOIN data_age_below_18_avg_ratings BY (title,year), data_age_above_18_avg_ratings BY (title,year);
+
+sorted_join_data_below_above_18 = ORDER join_data_below_above_18 BY data_age_below_18_avg_ratings::avg_rating DESC, data_age_above_18_avg_ratings::avg_rating ASC;
+top5_data_below_above_18_ = LIMIT sorted_join_data_below_above_18 5;
+
+top5_data_below_above_18 = FOREACH top5_data_below_above_18_ GENERATE data_age_below_18_avg_ratings::title AS title, data_age_below_18_avg_ratings::year AS year, data_age_below_18_avg_ratings::avg_rating AS rating_below_18, data_age_above_18_avg_ratings::avg_rating AS rating_above_18;
+
+-- ########################## WORST RATED-BY-EDUCATOR MOVIES WITH BEST SCORE BY COLLEGE/GRAD STUDENTS ##########################
+
+data_artists = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::occupation_names::name == 'academic/educator';
+data_students = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::occupation_names::name == 'college/grad student';
+
+group_data_artists = GROUP data_artists BY (movie_data::title,movie_data::year);
+group_data_students = GROUP data_students BY (movie_data::title,movie_data::year);
+
+data_artists_avg_ratings = FOREACH group_data_artists GENERATE FLATTEN(group) AS (title,year), AVG(data_artists.rating) AS avg_rating;
+data_students_avg_ratings = FOREACH group_data_students GENERATE FLATTEN(group) AS (title,year), AVG(data_students.rating) AS avg_rating;
+
+join_data_artists_students = JOIN data_artists_avg_ratings BY (title,year), data_students_avg_ratings BY (title,year);
+
+sorted_join_data_artists_students = ORDER join_data_artists_students BY data_students_avg_ratings::avg_rating DESC, data_artists_avg_ratings::avg_rating ASC;
+top5_data_artists_students_ = LIMIT sorted_join_data_artists_students 5;
+
+top5_data_artists_students = FOREACH top5_data_artists_students_ GENERATE data_students_avg_ratings::title AS title, data_students_avg_ratings::year AS year, data_students_avg_ratings::avg_rating AS students_rating, data_artists_avg_ratings::avg_rating AS artists_rating;
+
+-- ########################## PESIMISTIC AGE GROUPS (DESCENDING) ##########################
+
+-- ########################## MOST REVIEWED MOVIES ##########################
+
+-- ########################## YEAR OF BEST REVIEWED MOVIE FOR EACH AGE ##########################
+
+-- #### INCLUIR ANHO DE LA PELÍCULA EN LAS PARTICIONES
 -- ########################## TEST ##########################
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
-output_limit = LIMIT all_top1_movie_gender_age_avg_rating 10;
+output_limit = LIMIT all_top1_movie_occ_gender_avg_rating 10;
 DUMP output_limit;
 
 -- VER GUSTOS SEGUN ANHO
