@@ -1,0 +1,42 @@
+other	F	0.032937814
+other	M	0.09750593
+artist	F	0.016049244
+artist	M	0.034016233
+farmer	F	6.362475E-4
+farmer	M	0.0020608017
+lawyer	F	0.0026440285
+lawyer	M	0.017921971
+writer	F	0.015683101
+writer	M	0.044689383
+retired	F	0.0027930865
+retired	M	0.010954261
+homemaker	F	0.010555106
+homemaker	M	7.8930706E-4
+scientist	F	0.0041966327
+scientist	M	0.018751293
+programmer	F	0.006805647
+programmer	M	0.05041461
+unemployed	F	0.003468349
+unemployed	M	0.011426445
+K-12 student	F	0.0069737127
+K-12 student	M	0.016305342
+self-employed	F	0.007436893
+self-employed	M	0.038574006
+clerical/admin	F	0.014321571
+clerical/admin	M	0.017297728
+sales/marketing	F	0.011989664
+sales/marketing	M	0.03712144
+customer service	F	0.0039055191
+customer service	M	0.017947981
+academic/educator	F	0.032534655
+academic/educator	M	0.052805543
+doctor/health care	F	0.014978827
+doctor/health care	M	0.022214642
+technician/engineer	F	0.0076469746
+technician/engineer	M	0.06516535
+tradesman/craftsman	F	4.141611E-4
+tradesman/craftsman	M	0.01167154
+college/grad student	F	0.032459628
+college/grad student	M	0.09851232
+executive/managerial	F	0.017962988
+executive/managerial	M	0.08746002

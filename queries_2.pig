@@ -1,14 +1,15 @@
 -- LOAD DATA
--- raw_ratings = LOAD 'hdfs://cm:9000/uhadoop2023/group14/ratings_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
--- raw_users = LOAD 'hdfs://cm:9000/uhadoop2023/group14/users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
--- raw_movies = LOAD 'hdfs://cm:9000/uhadoop2023/group14/movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+raw_ratings = LOAD 'hdfs://cm:9000/uhadoop2023/group14/ratings_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
+raw_users = LOAD 'hdfs://cm:9000/uhadoop2023/group14/users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
+raw_movies = LOAD 'hdfs://cm:9000/uhadoop2023/group14/movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+occupation_names = LOAD 'hdfs://cm:9000/uhadoop2023/group14/occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
 
-raw_ratings = LOAD 'ratings_sample_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
-raw_users = LOAD 'users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
-raw_movies = LOAD 'movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+-- raw_ratings = LOAD 'ratings_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
+-- raw_users = LOAD 'users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
+-- raw_movies = LOAD 'movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
 
 -- OCCUPATION NAMES
-occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
+-- occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
 users_occupation_name = JOIN raw_users BY occupation, occupation_names BY occupation;
 users_no_occupation_id = FOREACH users_occupation_name GENERATE userID, gender, age, name, zipCode;
 
@@ -60,7 +61,7 @@ all_top10_occ_movie_avg_rating = FOREACH group_occ_movie_avg_rating {
 all_data = JOIN ratings_with_users_data BY ratings_data::raw_ratings::movieID, movie_data BY movieID;
 
 -- GET USERS OCCUPATION, MOVIE TITLE, MOVIE RATING AND MOVIE GENRES FROM ALL_DATA
-occ_movie_rating_genre = FOREACH all_data GENERATE ratings_with_users_data::name AS occupation, movie_data::title AS title, ratings_with_users_data::rating AS rating, FLATTEN(movie_data::genres) AS genre;
+occ_movie_rating_genre = FOREACH all_data GENERATE occupation_names::name AS occupation, movie_data::title AS title, raw_ratings::rating AS rating, FLATTEN(movie_data::genres) AS genre;
 
 -- GROUP BY USERS OCCUPATION AND MOVIE GENRE
 group_occ_genre = GROUP occ_movie_rating_genre BY (occupation, genre);
@@ -226,12 +227,44 @@ top5_data_artists_students_ = LIMIT sorted_join_data_artists_students 5;
 top5_data_artists_students = FOREACH top5_data_artists_students_ GENERATE data_students_avg_ratings::title AS title, data_students_avg_ratings::year AS year, data_students_avg_ratings::avg_rating AS students_rating, data_artists_avg_ratings::avg_rating AS artists_rating;
 
 -- ########################## PESIMISTIC AGE GROUPS (DESCENDING) ##########################
+
+group_ratings_by_age = GROUP ratings_with_users_data BY users_no_occupation_id::raw_users::age;
+ratings_by_age_avg = FOREACH group_ratings_by_age GENERATE group AS age, AVG(ratings_with_users_data.rating) AS avg_rating;
+sorted_ratings_by_age_avg = ORDER ratings_by_age_avg BY avg_rating DESC;
+
 -- ########################## YEAR OF BEST REVIEWED MOVIE FOR EACH AGE ##########################
 
+age_movie_ratings = FOREACH all_data GENERATE ratings_with_users_data::users_no_occupation_id::raw_users::age AS age, movie_data::title AS title, movie_data::year AS year, raw_ratings::rating AS rating;
+group_age_movie_ratings = GROUP age_movie_ratings BY (age, title, year);
+
+age_movie_avg_ratings = FOREACH group_age_movie_ratings GENERATE FLATTEN(group) AS (age, title, year), AVG(age_movie_ratings.rating) AS avg_rating;
+
+group_age_movie_avg_ratings = GROUP age_movie_avg_ratings BY age;
+
+-- GET TOP MOVIE GENRE FOR EACH OCCUPATION
+all_top_age_movie_avg_ratings = FOREACH group_age_movie_avg_ratings {
+    sorted_age_movie_avg_ratings = ORDER age_movie_avg_ratings BY avg_rating DESC;
+    top_age_movie_avg_ratings = LIMIT sorted_age_movie_avg_ratings 1;
+    GENERATE FLATTEN(top_age_movie_avg_ratings);
+};
+
+STORE all_top10_occ_movie_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top10_occ_movie_avg_rating';
+STORE all_top_occ_genre_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top_occ_genre_avg_rating';
+STORE all_top5_occ_movie_genre_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top5_occ_movie_genre_avg_rating';
+STORE all_top1_movie_occ_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top1_movie_occ_avg_rating';
+STORE all_top_movie_gender_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top_movie_gender_avg_rating';
+STORE all_top1_movie_age_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top1_movie_age_avg_rating';
+STORE all_top1_movie_occ_gender_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top1_movie_occ_gender_avg_rating';
+STORE all_top1_movie_gender_age_avg_rating INTO '/uhadoop2023/group14/results/queries_2/all_top1_movie_gender_age_avg_rating';
+STORE top5_data_below_above_18 INTO '/uhadoop2023/group14/results/queries_2/top5_data_below_above_18';
+STORE top5_data_artists_students INTO '/uhadoop2023/group14/results/queries_2/top5_data_artists_students';
+STORE sorted_ratings_by_age_avg INTO '/uhadoop2023/group14/results/queries_2/sorted_ratings_by_age_avg';
+STORE all_top_age_movie_avg_ratings INTO '/uhadoop2023/group14/results/queries_2/all_top_age_movie_avg_ratings';
 
 -- ########################## TEST ##########################
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
-output_limit = LIMIT proportion_votes_age 10;
-DUMP output_limit;
+-- output_limit = LIMIT all_top_age_movie_avg_ratings 10;
+-- DUMP output_limit;
 
 -- TAL VEZ LUEGO SEPARAR NUEVAMENTE POR OCUPACIÓN O POR EDADES
+-- MEJOR PELÍCULA POR GÉNERO 

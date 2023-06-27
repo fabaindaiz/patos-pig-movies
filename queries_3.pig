@@ -1,14 +1,15 @@
 -- LOAD DATA
--- raw_ratings = LOAD 'hdfs://cm:9000/uhadoop2023/group14/ratings_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
--- raw_users = LOAD 'hdfs://cm:9000/uhadoop2023/group14/users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
--- raw_movies = LOAD 'hdfs://cm:9000/uhadoop2023/group14/movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+raw_ratings = LOAD 'hdfs://cm:9000/uhadoop2023/group14/ratings_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
+raw_users = LOAD 'hdfs://cm:9000/uhadoop2023/group14/users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
+raw_movies = LOAD 'hdfs://cm:9000/uhadoop2023/group14/movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+occupation_names = LOAD 'hdfs://cm:9000/uhadoop2023/group14/occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
 
-raw_ratings = LOAD 'ratings_sample_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
-raw_users = LOAD 'users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
-raw_movies = LOAD 'movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
+-- raw_ratings = LOAD 'ratings_sample_t.dat' USING PigStorage('\t') AS (userID, movieID, rating, timestamp);
+-- raw_users = LOAD 'users_t.dat' USING PigStorage('\t') AS (userID, gender, age, occupation, zipCode);
+-- raw_movies = LOAD 'movies_t.dat' USING PigStorage('\t') AS (movieID, title, genres);
 
 -- OCCUPATION NAMES
-occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
+-- occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
 users_occupation_name = JOIN raw_users BY occupation, occupation_names BY occupation;
 users_no_occupation_id = FOREACH users_occupation_name GENERATE userID, gender, age, name, zipCode;
 
@@ -59,7 +60,20 @@ proportion_votes_occ_gender = FOREACH occupation_gender_votes GENERATE occupatio
 
 -- ########################## MOST REVIEWED MOVIES ##########################
 
+group_by_movies = GROUP all_data BY (movie_data::title, movie_data::year);
+count_votes_movies = FOREACH group_by_movies GENERATE FLATTEN(group) AS (title, year), COUNT(all_data) AS count;
+
+sorted_count_votes_movies = ORDER count_votes_movies BY count DESC;
+
+
+STORE proportion_votes_occ INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_occ';
+STORE proportion_votes_gender INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_gender';
+STORE proportion_votes_age INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_age';
+STORE proportion_votes_gender_age INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_gender_age';
+STORE proportion_votes_occ_gender INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_occ_gender';
+STORE sorted_count_votes_movies INTO '/uhadoop2023/group14/results/queries_3/sorted_count_votes_movies';
+
 -- ########################## TEST ##########################
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
-output_limit = LIMIT proportion_votes_gender_age 10;
-DUMP output_limit;
+-- output_limit = LIMIT sorted_count_votes_movies 10;
+-- DUMP output_limit;
