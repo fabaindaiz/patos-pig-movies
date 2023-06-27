@@ -226,17 +226,12 @@ top5_data_artists_students_ = LIMIT sorted_join_data_artists_students 5;
 top5_data_artists_students = FOREACH top5_data_artists_students_ GENERATE data_students_avg_ratings::title AS title, data_students_avg_ratings::year AS year, data_students_avg_ratings::avg_rating AS students_rating, data_artists_avg_ratings::avg_rating AS artists_rating;
 
 -- ########################## PESIMISTIC AGE GROUPS (DESCENDING) ##########################
-
--- ########################## MOST REVIEWED MOVIES ##########################
-
 -- ########################## YEAR OF BEST REVIEWED MOVIE FOR EACH AGE ##########################
 
--- #### INCLUIR ANHO DE LA PELÍCULA EN LAS PARTICIONES
+
 -- ########################## TEST ##########################
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
-output_limit = LIMIT all_top1_movie_occ_gender_avg_rating 10;
+output_limit = LIMIT proportion_votes_age 10;
 DUMP output_limit;
 
--- VER GUSTOS SEGUN ANHO
--- VER CUÁLES PELÍCULAS FUERON MÁS VECES CALIFICADAS
 -- TAL VEZ LUEGO SEPARAR NUEVAMENTE POR OCUPACIÓN O POR EDADES
