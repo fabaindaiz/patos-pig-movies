@@ -7,15 +7,15 @@ raw_movies = LOAD 'hdfs://cm:9000/uhadoop2023/group14/movies_t.dat' USING PigSto
 
 -- #### USERS ####
 
--- GROUP BY OCCUPATION
-group_users_occ = GROUP raw_users BY occupation;
-users_occ_count = FOREACH group_users_occ GENERATE group AS occupation, COUNT(raw_users.userID) AS count;
-users_occ_sorted = ORDER users_occ_count BY count DESC;
-
 -- OCCUPATION NAMES
-occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, name);
-occ_joined_data = JOIN users_occ_sorted BY occupation, occupation_names BY occupation;
-occ_filtered_data = FOREACH occ_joined_data GENERATE name, count;
+occupation_names = LOAD 'occupation_names.dat' USING PigStorage('\t') AS (occupation, occ_name);
+raw_users_occ_names = JOIN raw_users BY occupation, occupation_names BY occupation;
+raw_users_occ = FOREACH raw_users_occ_names GENERATE userID, gender, age, occ_name, zipCode;
+
+-- GROUP BY OCCUPATION
+group_users_occ = GROUP raw_users_occ BY occupation_names::occ_name;
+users_occ_count = FOREACH group_users_occ GENERATE group AS occ_name, COUNT(raw_users.userID) AS count;
+users_occ_sorted = ORDER users_occ_count BY count DESC;
 
 -- GROUP BY AGE
 group_users_age = GROUP raw_users BY age;
@@ -28,8 +28,8 @@ users_gender_count = FOREACH group_users_gender GENERATE group AS gender, COUNT(
 users_gender_sorted = ORDER users_gender_count BY count DESC;
 
 -- GROUP BY OCCUPATION AND GENDER
-group_users_occ_gender = GROUP raw_users BY (occupation, gender);
-users_occ_gender_count = FOREACH group_users_occ_gender GENERATE FLATTEN(group) AS (occupation,gender), COUNT(raw_users.userID) AS count;
+group_users_occ_gender = GROUP raw_users_occ BY (occupation_names::occ_name, raw_users::gender);
+users_occ_gender_count = FOREACH group_users_occ_gender GENERATE FLATTEN(group) AS (occ_name, gender), COUNT(raw_users.userID) AS count;
 users_occ_gender_sorted = ORDER users_occ_gender_count BY count DESC;
 
 
