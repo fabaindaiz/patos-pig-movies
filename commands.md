@@ -1,6 +1,9 @@
 scp -P 220 users_t.dat uhadoop@cm.dcc.uchile.cl:/data/2023/uhadoop/proyects/group14/.
 ssh -p 220 uhadoop@cm.dcc.uchile.cl
 
+ls /data/2023/uhadoop/proyects/group14/
+hdfs dfs -ls /uhadoop2023/group14/results/
+
 hdfs dfs -get /uhadoop2023/group14/results/queries_1 /data/2023/uhadoop/proyects/group14/queries_1
 hdfs dfs -get /uhadoop2023/group14/results/queries_2 /data/2023/uhadoop/proyects/group14/queries_2
 hdfs dfs -get /uhadoop2023/group14/results/queries_3 /data/2023/uhadoop/proyects/group14/queries_3
