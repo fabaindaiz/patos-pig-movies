@@ -63,8 +63,8 @@ all_top10_occ_movie_avg_rating = FOREACH group_occ_movie_avg_rating {
 -- JOIN ALL DATA FROM RAW RELATIONS
 all_data = JOIN ratings_with_users_data BY ratings_data::raw_ratings::movieID, movie_data BY movieID;
 
--- GET USERS OCCUPATION, MOVIE TITLE, MOVIE RATING AND MOVIE GENRES FROM ALL_DATA
-occ_movie_rating_genre = FOREACH all_data GENERATE occupation_names::name AS occupation, movie_data::title AS title, raw_ratings::rating AS rating, FLATTEN(movie_data::genres) AS genre;
+-- GET USERS OCCUPATION, MOVIE TITLE, MOVIE YEAR, MOVIE RATING AND MOVIE GENRES FROM ALL_DATA
+occ_movie_rating_genre = FOREACH all_data GENERATE occupation_names::name AS occupation, movie_data::title AS title, movie_data::year AS year, raw_ratings::rating AS rating, FLATTEN(movie_data::genres) AS genre;
 
 -- GROUP BY USERS OCCUPATION AND MOVIE GENRE
 group_occ_genre_ = GROUP occ_movie_rating_genre BY (occupation, genre);
@@ -102,7 +102,23 @@ all_top5_occ_movie_genre_avg_rating = FOREACH group_occ_movie_genre_avg_rating {
     GENERATE flatten(top5_occ_movie_genre_avg_rating);
 };
 
+-- ########################## TOP MOVIE FOR EACH GENRE FOR EACH OCCUPATION ##########################
 
+-- GROUP BY USERS OCCUPATION AND MOVIES TITLE AND MOVIES GENRE
+group_occ_movie_genre_ =  GROUP occ_movie_rating_genre BY (occupation, title, year, genre);
+group_occ_movie_genre = FILTER group_occ_movie_genre_ BY COUNT(occ_movie_rating_genre) >= 5;
+
+-- GET THE AVERAGE RATING OF EACH MOVIE BY OCCUPATION, SEPARATED BY GENRE TOO
+occ_movie_genre_avg_rating = FOREACH group_occ_movie_genre GENERATE FLATTEN(group) AS (occupation,title,year,genre), AVG(occ_movie_rating_genre.rating) AS avg_rating;
+
+-- GROUP BY USERS OCCUPATION AND MOVIE GENRE
+group_occ_movie_genre_avg_rating = GROUP occ_movie_genre_avg_rating BY (occupation, genre);
+
+all_top1_occ_movie_genre_avg_rating = FOREACH group_occ_movie_genre_avg_rating {
+    sorted_occ_movie_genre_avg_rating = ORDER occ_movie_genre_avg_rating BY avg_rating DESC;
+    top1_occ_movie_genre_avg_rating = LIMIT sorted_occ_movie_genre_avg_rating 1;
+    GENERATE flatten(top1_occ_movie_genre_avg_rating);
+};
 -- ########################## BEST AUDIENCE SCORE FOR EACH MOVIE (OCCUPATION) ##########################
 
 movie_occ_avg_rating = FOREACH occ_movie_title_avg_rating GENERATE title AS title, year AS year, occupation AS occupation, avg_rating AS avg_rating;
@@ -216,31 +232,33 @@ data_age_above_18_avg_ratings = FOREACH group_data_age_above_18 GENERATE FLATTEN
 
 join_data_below_above_18 = JOIN data_age_below_18_avg_ratings BY (title,year), data_age_above_18_avg_ratings BY (title,year);
 
-sorted_join_data_below_above_18 = ORDER join_data_below_above_18 BY data_age_below_18_avg_ratings::avg_rating DESC, data_age_above_18_avg_ratings::avg_rating ASC;
+filter_join_data_below_above_18 = FILTER join_data_below_above_18 BY data_age_above_18_avg_ratings::avg_rating < data_age_below_18_avg_ratings::avg_rating;
+sorted_join_data_below_above_18 = ORDER filter_join_data_below_above_18 BY data_age_above_18_avg_ratings::avg_rating ASC, data_age_below_18_avg_ratings::avg_rating DESC;
 top5_data_below_above_18_ = LIMIT sorted_join_data_below_above_18 5;
 
 top5_data_below_above_18 = FOREACH top5_data_below_above_18_ GENERATE data_age_below_18_avg_ratings::title AS title, data_age_below_18_avg_ratings::year AS year, data_age_below_18_avg_ratings::avg_rating AS rating_below_18, data_age_above_18_avg_ratings::avg_rating AS rating_above_18;
 
 -- ########################## WORST RATED-BY-EDUCATOR MOVIES WITH BEST SCORE BY COLLEGE/GRAD STUDENTS ##########################
 
-data_artists = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::occupation_names::name == 'academic/educator';
+data_academics = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::occupation_names::name == 'academic/educator';
 data_students = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::occupation_names::name == 'college/grad student';
 
-group_data_artists_ = GROUP data_artists BY (movie_data::title,movie_data::year);
-group_data_artists = FILTER group_data_artists_ BY COUNT(data_artists) >= 5;
+group_data_academics_ = GROUP data_academics BY (movie_data::title,movie_data::year);
+group_data_academics = FILTER group_data_academics_ BY COUNT(data_academics) >= 5;
 
 group_data_students_ = GROUP data_students BY (movie_data::title,movie_data::year);
 group_data_students = FILTER group_data_students_ BY COUNT(data_students) >= 5;
 
-data_artists_avg_ratings = FOREACH group_data_artists GENERATE FLATTEN(group) AS (title,year), AVG(data_artists.rating) AS avg_rating;
+data_academics_avg_ratings = FOREACH group_data_academics GENERATE FLATTEN(group) AS (title,year), AVG(data_academics.rating) AS avg_rating;
 data_students_avg_ratings = FOREACH group_data_students GENERATE FLATTEN(group) AS (title,year), AVG(data_students.rating) AS avg_rating;
 
-join_data_artists_students = JOIN data_artists_avg_ratings BY (title,year), data_students_avg_ratings BY (title,year);
+join_data_academics_students = JOIN data_academics_avg_ratings BY (title,year), data_students_avg_ratings BY (title,year);
 
-sorted_join_data_artists_students = ORDER join_data_artists_students BY data_students_avg_ratings::avg_rating DESC, data_artists_avg_ratings::avg_rating ASC;
-top5_data_artists_students_ = LIMIT sorted_join_data_artists_students 5;
+filter_join_data_academics_students = FILTER join_data_academics_students BY data_academics_avg_ratings::avg_rating < data_students_avg_ratings::avg_rating;
+sorted_join_data_academics_students = ORDER filter_join_data_academics_students BY data_academics_avg_ratings::avg_rating ASC, data_students_avg_ratings::avg_rating DESC;
+top5_data_academics_students_ = LIMIT sorted_join_data_academics_students 5;
 
-top5_data_artists_students = FOREACH top5_data_artists_students_ GENERATE data_students_avg_ratings::title AS title, data_students_avg_ratings::year AS year, data_students_avg_ratings::avg_rating AS students_rating, data_artists_avg_ratings::avg_rating AS artists_rating;
+top5_data_academics_students = FOREACH top5_data_academics_students_ GENERATE data_students_avg_ratings::title AS title, data_students_avg_ratings::year AS year, data_students_avg_ratings::avg_rating AS students_rating, data_academics_avg_ratings::avg_rating AS academics_rating;
 
 -- ########################## PESIMISTIC AGE GROUPS (DESCENDING) ##########################
 
@@ -268,4 +286,4 @@ all_top_age_movie_avg_ratings = FOREACH group_age_movie_avg_ratings {
 -- ########################## TEST ##########################
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
 -- output_limit = LIMIT top5_data_artists_students 10;
--- DUMP output_limit;
+-- DUMP output_limit; 
