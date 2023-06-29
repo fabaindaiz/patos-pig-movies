@@ -1,3 +1,5 @@
+HADcc5212$oop
+
 scp -P 220 users_t.dat uhadoop@cm.dcc.uchile.cl:/data/2023/uhadoop/proyects/group14/.
 ssh -p 220 uhadoop@cm.dcc.uchile.cl
 
