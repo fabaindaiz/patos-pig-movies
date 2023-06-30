@@ -69,4 +69,3 @@ STORE movie_year_genres_sorted INTO '/uhadoop2023/group14/results/queries_1/movi
 -- DEFINE LIMIT TO SEE FIRST 10 ROWS IN OUTPUT
 -- output_limit = LIMIT movie_year_genres_sorted 10;
 -- DUMP output_limit;
-

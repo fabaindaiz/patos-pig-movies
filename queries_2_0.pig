@@ -32,21 +32,29 @@ ratings_with_users_data = JOIN ratings_data BY userID, users_no_occupation_id BY
 -- JOIN ALL DATA FROM RAW RELATIONS
 all_data = JOIN ratings_with_users_data BY ratings_data::raw_ratings::movieID, movie_data BY movieID;
 
--- ########################## YEAR OF BEST REVIEWED MOVIE FOR EACH AGE ##########################
+-- GET USERS OCCUPATION, MOVIE TITLE, MOVIE YEAR, MOVIE RATING AND MOVIE GENRES FROM ALL_DATA
+occ_movie_rating_genre = FOREACH all_data GENERATE occupation_names::name AS occupation, movie_data::title AS title, movie_data::year AS year, raw_ratings::rating AS rating, FLATTEN(movie_data::genres) AS genre;
 
-age_movie_ratings = FOREACH all_data GENERATE ratings_with_users_data::users_no_occupation_id::raw_users::age AS age, movie_data::title AS title, movie_data::year AS year, raw_ratings::rating AS rating;
-group_age_movie_ratings_ = GROUP age_movie_ratings BY (age, title, year);
-group_age_movie_ratings = FILTER group_age_movie_ratings_ BY COUNT(age_movie_ratings) >= 5; 
+-- ########################## WORST MOVIES WITH BEST SCORE BY MINOR AUDIENCES ##########################
 
-age_movie_avg_ratings = FOREACH group_age_movie_ratings GENERATE FLATTEN(group) AS (age, title, year), AVG(age_movie_ratings.rating) AS avg_rating;
+data_age_below_18 = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::raw_users::age <= 18;
+group_data_age_below_18_ = GROUP data_age_below_18 BY (movie_data::title,movie_data::year);
+group_data_age_below_18 = FILTER group_data_age_below_18_ BY COUNT(data_age_below_18) >=5;
 
-group_age_movie_avg_ratings = GROUP age_movie_avg_ratings BY age;
+data_age_below_18_avg_ratings = FOREACH group_data_age_below_18 GENERATE FLATTEN(group) AS (title,year), AVG(data_age_below_18.rating) AS avg_rating;
 
--- GET TOP MOVIE GENRE FOR EACH OCCUPATION
-all_top_age_movie_avg_ratings = FOREACH group_age_movie_avg_ratings {
-    sorted_age_movie_avg_ratings = ORDER age_movie_avg_ratings BY avg_rating DESC;
-    top_age_movie_avg_ratings = LIMIT sorted_age_movie_avg_ratings 1;
-    GENERATE FLATTEN(top_age_movie_avg_ratings);
-};
+data_age_above_18 = FILTER all_data BY ratings_with_users_data::users_no_occupation_id::raw_users::age > 18;
+group_data_age_above_18_ = GROUP data_age_above_18 BY (movie_data::title,movie_data::year);
+group_data_age_above_18 = FILTER group_data_age_above_18_ BY COUNT(data_age_above_18)>=5;
 
-STORE all_top_age_movie_avg_ratings INTO '/uhadoop2023/group14/results/queries_2_0/all_top_age_movie_avg_ratings';
+data_age_above_18_avg_ratings = FOREACH group_data_age_above_18 GENERATE FLATTEN(group) AS (title,year), AVG(data_age_above_18.rating) AS avg_rating;
+
+join_data_below_above_18 = JOIN data_age_below_18_avg_ratings BY (title,year), data_age_above_18_avg_ratings BY (title,year);
+
+filter_join_data_below_above_18 = FILTER join_data_below_above_18 BY data_age_above_18_avg_ratings::avg_rating < data_age_below_18_avg_ratings::avg_rating;
+sorted_join_data_below_above_18 = ORDER filter_join_data_below_above_18 BY data_age_above_18_avg_ratings::avg_rating ASC, data_age_below_18_avg_ratings::avg_rating DESC;
+top5_data_below_above_18_ = LIMIT sorted_join_data_below_above_18 5;
+
+top5_data_below_above_18 = FOREACH top5_data_below_above_18_ GENERATE data_age_below_18_avg_ratings::title AS title, data_age_below_18_avg_ratings::year AS year, data_age_below_18_avg_ratings::avg_rating AS rating_below_18, data_age_above_18_avg_ratings::avg_rating AS rating_above_18;
+
+STORE top5_data_below_above_18 INTO '/uhadoop2023/group14/results/queries_2_0/top5_data_below_above_18';
