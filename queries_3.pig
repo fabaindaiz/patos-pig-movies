@@ -60,11 +60,12 @@ proportion_votes_occ_gender = FOREACH occupation_gender_votes GENERATE occupatio
 
 -- ########################## MOST REVIEWED MOVIES ##########################
 
-group_by_movies = GROUP all_data BY (movie_data::title, movie_data::year);
-count_votes_movies = FOREACH group_by_movies GENERATE FLATTEN(group) AS (title, year), COUNT(all_data) AS count;
+group_by_movies = GROUP raw_ratings BY movieID;
+count_votes_movies_ = FOREACH group_by_movies GENERATE FLATTEN(group) AS movieID, COUNT(raw_ratings) AS count;
 
+join_count_votes_movies_ = JOIN movie_data BY movieID, count_votes_movies_ BY movieID;
+count_votes_movies = FOREACH join_count_votes_movies_ GENERATE movie_data::title, movie_data::year, count_votes_movies_::count;
 sorted_count_votes_movies = ORDER count_votes_movies BY count DESC;
-
 
 STORE proportion_votes_occ INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_occ';
 STORE proportion_votes_gender INTO '/uhadoop2023/group14/results/queries_3/proportion_votes_gender';
